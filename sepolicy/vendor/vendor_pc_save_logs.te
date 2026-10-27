@@ -1,0 +1,22 @@
+# pc_save_logs.sh in Android: save the kernel log (with logcat in it, from pc_logcat) to the
+# pc_logs partition, taking over Ctrl+Alt+Del to do it
+type vendor_pc_save_logs, domain;
+type vendor_pc_save_logs_exec, exec_type, vendor_file_type, file_type;
+init_daemon_domain(vendor_pc_save_logs)
+
+allow vendor_pc_save_logs vendor_shell_exec:file rx_file_perms;
+allow vendor_pc_save_logs vendor_toolbox_exec:file rx_file_perms;
+
+# Logs
+allow vendor_pc_save_logs kernel:system syslog_read;
+allow vendor_pc_save_logs kmsg_device:chr_file w_file_perms;
+
+# Write them
+allow vendor_pc_save_logs mnt_vendor_file:dir search;
+allow vendor_pc_save_logs pc_logs_file:dir create_dir_perms;
+allow vendor_pc_save_logs pc_logs_file:file create_file_perms;
+allow vendor_pc_save_logs pc_logs_file:filesystem getattr;
+
+# Ctrl+Alt+Del
+allow vendor_pc_save_logs proc_pc_cad:file rw_file_perms;
+set_prop(vendor_pc_save_logs, powerctl_prop)

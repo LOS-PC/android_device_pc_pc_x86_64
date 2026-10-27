@@ -1,0 +1,15 @@
+//
+// SPDX-FileCopyrightText: The LineageOS Project
+// SPDX-License-Identifier: Apache-2.0
+//
+
+cc_binary {
+    name: "pc_gpu_detect",
+    srcs: ["pc_gpu_detect.c"],
+    shared_libs: [
+        "libcutils",
+        "libdrm",
+        "liblog",
+    ],
+    vendor: true,
+}

@@ -1,0 +1,29 @@
+# Install disks. Partitions are labelled by their number in the LineageOS layout,
+# since the disk name depends on the hardware (eMMC, NVMe, SATA, or virtio in a VM).
+# fc_sort puts longer stems (the part before the first regex character), then longer rules,
+# last, and the last match wins. The SATA / USB (sd*) rules are written separately, with
+# mainline-common's stem (/dev/block/sd) and longer than its sd[a-z][0-9]* rule, so they
+# win over it.
+/dev/block/mmcblk[0-9]+						u:object_r:pc_disk_device:s0
+/dev/block/nvme[0-9]+n[0-9]+					u:object_r:pc_disk_device:s0
+/dev/block/(mmcblk[0-9]+p|nvme[0-9]+n[0-9]+p|vd[a-z])2		u:object_r:super_block_device:s0
+/dev/block/(mmcblk[0-9]+p|nvme[0-9]+n[0-9]+p|vd[a-z])3		u:object_r:misc_block_device:s0
+/dev/block/(mmcblk[0-9]+p|nvme[0-9]+n[0-9]+p|vd[a-z])4		u:object_r:persist_block_device:s0
+/dev/block/(mmcblk[0-9]+p|nvme[0-9]+n[0-9]+p|vd[a-z])5		u:object_r:metadata_block_device:s0
+/dev/block/(mmcblk[0-9]+p|nvme[0-9]+n[0-9]+p|vd[a-z])([7-9]|10)	u:object_r:boot_block_device:s0
+/dev/block/sd[a-z][a-z]?2						u:object_r:super_block_device:s0
+/dev/block/sd[a-z][a-z]?3						u:object_r:misc_block_device:s0
+/dev/block/sd[a-z][a-z]?4						u:object_r:persist_block_device:s0
+/dev/block/sd[a-z][a-z]?5						u:object_r:metadata_block_device:s0
+/dev/block/sd[a-z][a-z]?([7-9]|10)					u:object_r:boot_block_device:s0
+/dev/block/sd[a-z][a-z]?12						u:object_r:userdata_block_device:s0
+/dev/block/sd[a-z][a-z]?13						u:object_r:pc_logs_block_device:s0
+/dev/block/(mmcblk[0-9]+p|nvme[0-9]+n[0-9]+p|vd[a-z])12		u:object_r:userdata_block_device:s0
+/dev/block/(mmcblk[0-9]+p|nvme[0-9]+n[0-9]+p|vd[a-z])13		u:object_r:pc_logs_block_device:s0
+
+# Executables
+/vendor/bin/pc_gpu_detect						u:object_r:vendor_pc_gpu_detect_exec:s0
+/vendor/bin/pc_save_logs\.sh						u:object_r:vendor_pc_save_logs_exec:s0
+
+# Logs
+/mnt/vendor/pc_logs(/.*)?						u:object_r:pc_logs_file:s0

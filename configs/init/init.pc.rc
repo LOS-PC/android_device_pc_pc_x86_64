@@ -1,0 +1,53 @@
+import /vendor/etc/init/hw/init.virt.rc
+
+# Partitions are found by their GPT names (androidboot.boot_devices=any),
+# so no per-disk symlinks are needed.
+on fs
+    mkdir /mnt/vendor/EFI 0770 root root
+    mkdir /mnt/vendor/persist 0770 system system
+
+    # Mount everything that does not require fsck
+    mount_all --early
+
+    # Logs (pc_save_logs.sh): the pc_logs partition stays mounted, with sync so a reset
+    # can't leave half-written logs
+    mkdir /mnt/vendor/pc_logs 0770 root root
+    mount vfat /dev/block/by-name/pc_logs /mnt/vendor/pc_logs rw sync noatime shortname=lower context=u:object_r:pc_logs_file:s0
+    start vendor.pc_save_logs
+
+on late-fs
+    # Mount RW partitions which need run fsck
+    mount_all --late
+
+# Save the kernel log (with logcat in it, see pc_logcat.rc) to the pc_logs partition on
+# every reboot, including Ctrl+Alt+Del (pc_save_logs.sh watch takes it over from the kernel)
+service vendor.pc_save_logs /vendor/bin/pc_save_logs.sh watch
+    user root
+    group root
+    oneshot
+    disabled
+
+on shutdown
+    exec - root root -- /vendor/bin/pc_save_logs.sh save
+
+# GPU: pc_gpu_detect sets ro.vendor.graphics.gpu and ro.vendor.graphics. Runs at init,
+# so the property triggers below fire before the graphics HALs start.
+on init
+    exec u:r:vendor_pc_gpu_detect:s0 -- /vendor/bin/pc_gpu_detect
+
+# Intel
+on property:ro.vendor.graphics.gpu=intel && property:ro.boot.gpu_workaround=all
+    setprop ro.vendor.hwc.drm.avoid_using_alpha_bits_for_framebuffer 1
+    setprop ro.vendor.hwc.drm.disable_planes 1
+
+# Intel - mesa
+on property:ro.vendor.graphics.gpu=intel && property:ro.vendor.graphics=mesa
+    setprop ro.opengles.version 196610
+
+on property:ro.vendor.graphics.gpu=intel && property:ro.vendor.graphics=mesa && property:ro.boot.hardware_vulkan=intel
+    setprop ro.hardware.vulkan intel
+
+on property:ro.vendor.graphics.gpu=intel && property:ro.vendor.graphics=mesa && property:ro.boot.hardware_vulkan=intel_hasvk
+    setprop ro.hardware.vulkan intel_hasvk
+
+# Everything else uses software rendering (ro.vendor.graphics=swiftshader, see init.virt.rc)

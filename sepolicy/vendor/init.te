@@ -1,0 +1,3 @@
+# Logs: mount the pc_logs partition at /mnt/vendor/pc_logs
+allow init pc_logs_file:dir mounton;
+allow init pc_logs_file:filesystem { mount unmount relabelfrom relabelto };

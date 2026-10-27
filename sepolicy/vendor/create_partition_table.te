@@ -1,0 +1,19 @@
+recovery_only(`
+    # pc_create_partition_table.sh: pick the install disk from sysfs and partition it
+    allow create_partition_table pc_disk_device:blk_file rw_file_perms;
+    allowxperm create_partition_table pc_disk_device:blk_file ioctl { BLKGETSIZE BLKPBSZGET BLKRRPART HDIO_GETGEO };
+
+    allow create_partition_table sysfs_type:dir r_dir_perms;
+    allow create_partition_table sysfs_type:file r_file_perms;
+    allow create_partition_table sysfs_type:lnk_file read;
+
+    allow create_partition_table kmsg_device:chr_file w_file_perms;
+
+    # Wait for the new partitions to show up (by-name links to their nodes)
+    allow create_partition_table { persist_block_device userdata_block_device }:blk_file getattr;
+
+    # Format the pc_logs partition (an empty FAT image)
+    allow create_partition_table pc_logs_block_device:blk_file { getattr w_file_perms };
+
+    set_prop(create_partition_table, vendor_preinstall_check_prop)
+')

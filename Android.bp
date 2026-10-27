@@ -1,0 +1,34 @@
+//
+// SPDX-FileCopyrightText: The LineageOS Project
+// SPDX-License-Identifier: Apache-2.0
+//
+
+soong_namespace {
+    imports: [
+        "device/virt/virt-common",
+    ],
+}
+
+genrule {
+    name: "gen_fstab_pc",
+    srcs: [
+        ":fstab.virt-common",
+        ":fstab.virt-ab",
+        "configs/fstab/fstab.pc-common",
+    ],
+    out: ["fstab.pc"],
+    cmd: "cat $(in) > $(out)",
+}
+
+prebuilt_etc {
+    name: "fstab.pc",
+    src: ":gen_fstab_pc",
+    vendor: true,
+    vendor_ramdisk_available: true,
+}
+
+sh_binary {
+    name: "pc_logcat.sh",
+    src: "configs/scripts/pc_logcat.sh",
+    system_ext_specific: true,
+}

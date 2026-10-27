@@ -1,0 +1,6 @@
+# Graphics: Intel integrated GPUs are always 00:02.0
+genfscon sysfs /devices/pci0000:00/0000:00:02.0			u:object_r:sysfs_gpu:s0
+
+# Ctrl+Alt+Del handling (pc_save_logs in recovery)
+genfscon proc /sys/kernel/cad_pid					u:object_r:proc_pc_cad:s0
+genfscon proc /sys/kernel/ctrl-alt-del					u:object_r:proc_pc_cad:s0

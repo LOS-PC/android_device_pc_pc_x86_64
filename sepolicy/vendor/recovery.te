@@ -1,0 +1,24 @@
+recovery_only(`
+    # pc_install_disk_select: list disks with their partition tables and pass on the choice
+    allow recovery pc_disk_device:blk_file r_file_perms;
+    allow recovery { sd_device vd_device }:blk_file r_file_perms;
+    allow recovery sysfs_type:dir r_dir_perms;
+    allow recovery sysfs_type:file r_file_perms;
+    allow recovery sysfs_type:lnk_file read;
+
+    set_prop(recovery, vendor_create_partition_table_prop)
+
+    # pc_save_logs.sh: save the kernel and recovery logs to the installer USB stick, taking
+    # over Ctrl+Alt+Del to do it. It runs as recovery, whose dac_override lets it write into the
+    # media_rw-owned mount of the stick made by recovery itself.
+    allow recovery pc_logs_block_device:blk_file rw_file_perms;
+    allow recovery sd_device:blk_file w_file_perms;
+    allow recovery proc:lnk_file read;
+    allow recovery storage_file:dir search;
+    allow recovery vfat:dir create_dir_perms;
+    allow recovery vfat:file create_file_perms;
+    allow recovery proc_random:dir search;
+    allow recovery proc_random:file r_file_perms;
+    allow recovery proc:dir search;
+    allow recovery proc_pc_cad:file rw_file_perms;
+')

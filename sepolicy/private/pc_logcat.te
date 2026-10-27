@@ -1,0 +1,13 @@
+# pc_logcat.sh: copy logcat into the kernel log, so pc_save_logs.sh (vendor) saves it too
+type pc_logcat, domain, coredomain;
+type pc_logcat_exec, system_file_type, exec_type, file_type;
+init_daemon_domain(pc_logcat)
+
+allow pc_logcat shell_exec:file rx_file_perms;
+
+# No read_runtime_log_tags: only the events buffer needs them, and logd.te limits who may
+read_logd(pc_logcat)
+get_prop(pc_logcat, logd_prop)
+
+# stdio_to_kmsg: init hands stdout over as /dev/kmsg_debug
+allow pc_logcat { kmsg_device kmsg_debug_device }:chr_file { getattr w_file_perms };

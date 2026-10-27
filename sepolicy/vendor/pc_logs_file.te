@@ -1,0 +1,2 @@
+# The pc_logs partition, mounted at /mnt/vendor/pc_logs with context=pc_logs_file
+allow pc_logs_file self:filesystem associate;

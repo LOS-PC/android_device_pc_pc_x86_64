@@ -1,0 +1,2 @@
+# Installer disk choice from pc_install_disk_select
+vendor.pc_install.	u:object_r:vendor_create_partition_table_prop:s0

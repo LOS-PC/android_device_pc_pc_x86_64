@@ -1,0 +1,11 @@
+# Copy logcat into the kernel log (pc_logcat.sh), so the logs pc_save_logs.sh saves (on
+# shutdown and on Ctrl+Alt+Del) have it too. stdio_to_kmsg writes at the default level,
+# which loglevel=3 keeps off the screen. Not oneshot: init restarts it if it exits.
+service pc_logcat /system_ext/bin/pc_logcat.sh
+    user logd
+    group log
+    stdio_to_kmsg
+    disabled
+
+on late-init
+    start pc_logcat

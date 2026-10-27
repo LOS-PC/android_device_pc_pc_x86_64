@@ -1,0 +1,4 @@
+type pc_disk_device, dev_type;
+type proc_pc_cad, fs_type, proc_type;
+type pc_logs_block_device, dev_type;
+type pc_logs_file, file_type;

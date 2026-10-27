@@ -1,0 +1,47 @@
+import /init.recovery.virt.rc
+
+# Installer: pc_install_disk_select asks which disk to install to (and whether to erase it),
+# then pc_create_partition_table.sh partitions it. Neither runs outside the installer.
+service pc_install_disk_select /system/bin/pc_install_disk_select
+    user root
+    group root graphics input
+    seclabel u:r:recovery:s0
+    oneshot
+    disabled
+
+service create_partition_table /system/bin/sh -e /system/bin/pc_create_partition_table.sh /system/bin/sgdisk ${vendor.pc_install.disk} ${vendor.pc_install.erase} ${ro.build.ab_update}
+    user root
+    group root
+    seclabel u:r:create_partition_table:s0
+    oneshot
+    disabled
+
+service pc_install_logs /system/bin/sh /system/bin/pc_install_logs.sh
+    user root
+    group root
+    seclabel u:r:recovery:s0
+    disabled
+
+# Save the kernel and recovery logs to the installer USB stick on every reboot, including
+# Ctrl+Alt+Del (pc_save_logs.sh watch takes it over from the kernel)
+service pc_save_logs /system/bin/sh /system/bin/pc_save_logs.sh watch
+    user root
+    group root
+    seclabel u:r:recovery:s0
+    oneshot
+    disabled
+
+on fs
+    start pc_save_logs
+
+on shutdown
+    exec u:r:recovery:s0 -- /system/bin/sh /system/bin/pc_save_logs.sh save
+
+on early-fs && property:ro.boot.install_logs=1
+    start pc_install_logs
+
+on early-fs && property:ro.boot.install=1
+    start pc_install_disk_select
+
+on property:ro.boot.install=1 && property:vendor.pc_install.disk=*
+    start create_partition_table
