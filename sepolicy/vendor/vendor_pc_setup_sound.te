@@ -1,0 +1,11 @@
+# pc_setup_sound: unmute the outputs of every sound card and pick the one the audio HAL uses
+type vendor_pc_setup_sound, domain;
+type vendor_pc_setup_sound_exec, exec_type, vendor_file_type, file_type;
+init_daemon_domain(vendor_pc_setup_sound)
+
+allow vendor_pc_setup_sound audio_device:dir r_dir_perms;
+allow vendor_pc_setup_sound audio_device:chr_file { rw_file_perms ioctl };
+
+# Pick the default output and input from /proc/asound/pcm for the audio HAL
+r_dir_file(vendor_pc_setup_sound, proc_asound)
+set_prop(vendor_pc_setup_sound, vendor_audio_prop)

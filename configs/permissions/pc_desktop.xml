@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-FileCopyrightText: The LineageOS Project
+    SPDX-License-Identifier: Apache-2.0
+-->
+<!-- Desktop PCs and laptops, on top of tablet_core_hardware.xml (virt-common).
+     Like frameworks/native/data/etc/pc_core_hardware.xml, but the touchscreen features stay:
+     most apps implicitly require android.hardware.touchscreen, and app stores hide them on
+     devices without it, while mouse clicks work as touches anyway. -->
+<permissions>
+    <!-- A PC: apps and the system adapt to keyboard and mouse, the display isn't rotated,
+         and with freeform windows the display starts in desktop windowing mode -->
+    <feature name="android.hardware.type.pc" />
+    <feature name="android.software.freeform_window_management" />
+
+    <!-- Sensors desktops and regular laptops don't have: declared by tablet_core_hardware.xml
+         and by virt-common for its virtual sensors -->
+    <unavailable-feature name="android.hardware.sensor.accelerometer" />
+    <unavailable-feature name="android.hardware.sensor.ambient_temperature" />
+    <unavailable-feature name="android.hardware.sensor.barometer" />
+    <unavailable-feature name="android.hardware.sensor.compass" />
+    <unavailable-feature name="android.hardware.sensor.gyroscope" />
+    <unavailable-feature name="android.hardware.sensor.hinge_angle" />
+    <unavailable-feature name="android.hardware.sensor.proximity" />
+    <unavailable-feature name="android.hardware.sensor.relative_humidity" />
+</permissions>

@@ -21,9 +21,44 @@
 /dev/block/(mmcblk[0-9]+p|nvme[0-9]+n[0-9]+p|vd[a-z])12		u:object_r:userdata_block_device:s0
 /dev/block/(mmcblk[0-9]+p|nvme[0-9]+n[0-9]+p|vd[a-z])13		u:object_r:pc_logs_block_device:s0
 
+# Same-process HAL: Mesa's driver (libgallium_dri.so, which mainline-common labels) and RADV
+# link these for AMD GPUs, and they're loaded into surfaceflinger and app processes
+/(vendor|system/vendor)/lib(64)?/libdrm_amdgpu\.so						u:object_r:same_process_hal_file:s0
+/(vendor|system/vendor)/lib(64)?/libdrm_radeon\.so						u:object_r:same_process_hal_file:s0
+
+# GPUs: Mesa (libdrm's drmGetDevices2) finds the GPU through these, in surfaceflinger and
+# app processes, which may read sysfs_gpu. genfs_contexts can only label fixed paths (the
+# Intel iGPU is always 0000:00:02.0), and AMD GPUs sit anywhere on PCI, so these label the
+# files libdrm reads in every PCI function's directory: its IDs and uevent (PCI_SLOT_NAME),
+# plus the uevent of DRM nodes. ueventd applies them (restorecon) as devices show up.
+/sys/devices/pci[0-9a-f]{4}:[0-9a-f]{2}(/[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7])+/(uevent|vendor|device|subsystem_vendor|subsystem_device|revision)	u:object_r:sysfs_gpu:s0
+/sys/devices/pci[0-9a-f]{4}:[0-9a-f]{2}(/[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7])+/drm/(card|renderD)[0-9]+/uevent	u:object_r:sysfs_gpu:s0
+
 # Executables
+/vendor/bin/pc_bt_detect\.sh						u:object_r:vendor_pc_bt_detect_exec:s0
 /vendor/bin/pc_gpu_detect						u:object_r:vendor_pc_gpu_detect_exec:s0
+/vendor/bin/pc_setup_sound						u:object_r:vendor_pc_setup_sound_exec:s0
 /vendor/bin/pc_save_logs\.sh						u:object_r:vendor_pc_save_logs_exec:s0
 
 # Logs
 /mnt/vendor/pc_logs(/.*)?						u:object_r:pc_logs_file:s0
+
+# Health HAL (services/health)
+/(vendor|system/vendor)/bin/hw/android\.hardware\.health-service\.pc	u:object_r:hal_health_default_exec:s0
+
+# Batteries and chargers the health HAL reads: ACPI ones sit under LNXSYSTM:00 at a depth that
+# depends on the firmware (e.g. .../PNP0C09:00/PNP0C0A:00/power_supply/BAT0), and USB / I2C
+# ones under their bus, so genfs_contexts can't name them. ueventd applies these (restorecon)
+# as each power supply shows up.
+/sys/devices/.*/power_supply/[^/]+(/.*)?				u:object_r:sysfs_batteryinfo:s0
+
+# Wakeup sources, read by system_suspend for its stats: AOSP labels only the virtual ones,
+# and on PCs most belong to ACPI and PCI devices (.../device/wakeup/wakeupN)
+/sys/devices/.*/wakeup/wakeup[0-9]+(/.*)?				u:object_r:sysfs_wakeup:s0
+
+# Laptop backlights, written by the light HAL (hal_light_default.te), with the type
+# mainline-common gives /sys/class/backlight: GPU drivers and ACPI put them under the graphics
+# device's .../backlight/<name> (amdgpu_bl0, acpi_video0) or as a connector's child
+# (.../drm/card0/card0-eDP-1/intel_backlight, nv_backlight)
+/sys/devices/.*/backlight/[^/]+(/.*)?					u:object_r:vendor_sysfs_backlight:s0
+/sys/devices/.*/drm/card[0-9]+/card[0-9]+-[^/]+/[a-z0-9_]+_backlight(/.*)?	u:object_r:vendor_sysfs_backlight:s0

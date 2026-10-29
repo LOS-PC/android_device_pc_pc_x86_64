@@ -6,5 +6,11 @@ init_daemon_domain(vendor_pc_gpu_detect);
 set_prop(vendor_pc_gpu_detect, vendor_graphics_prop)
 set_prop(vendor_pc_gpu_detect, vendor_minigbm_prop)
 
+# Tell drm_hwcomposer which card drives the display
+set_prop(vendor_pc_gpu_detect, vendor_hwc_drm_prop)
+
+# Wait for the vendor modules (amdgpu) to be loaded
+get_prop(vendor_pc_gpu_detect, vendor_dlkm_prop)
+
 allow vendor_pc_gpu_detect gpu_device:dir r_dir_perms;
 allow vendor_pc_gpu_detect gpu_device:chr_file { getattr ioctl map open read write };

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-FileCopyrightText: The LineageOS Project
+    SPDX-License-Identifier: Apache-2.0
+-->
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    android:title="@string/sound_settings_title">
+
+    <!-- Entries are filled in from the sound cards' devices -->
+    <ListPreference
+        android:key="output"
+        android:title="@string/sound_output_title"
+        android:persistent="false" />
+
+    <ListPreference
+        android:key="input"
+        android:title="@string/sound_input_title"
+        android:persistent="false" />
+</PreferenceScreen>

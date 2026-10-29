@@ -9,7 +9,9 @@
 #   log, which recovery and update_engine_sideload write to. Falls back to the installer
 #   USB stick when the disk has no pc_logs partition yet.
 # - Android (/vendor/bin/pc_save_logs.sh): the kernel log, which pc_logcat (system_ext)
-#   fills with logcat. init mounts the partition at /mnt/vendor/pc_logs.
+#   fills with logcat, split into dmesg.txt.gz (kernel) and logcat.txt.gz, plus
+#   kernel-early.txt, the kernel's own messages a minute into the boot. init mounts the
+#   partition at /mnt/vendor/pc_logs.
 #
 # save:  save the logs once (init runs this on shutdown, so every reboot saves them)
 # watch: take over Ctrl+Alt+Del from the kernel, which would reboot right away; save the
@@ -31,6 +33,10 @@ PC_LOGS_PARTITION=/dev/block/by-name/pc_logs
 # older boots are dropped to keep both
 KEEP_BOOTS=4
 MIN_FREE_KB=4608
+# A logcat line pc_logcat copied into the kernel log: "[  12.345678] MM-DD HH:MM:SS.mmm ..."
+LOGCAT_LINE='^\[ *[0-9]+\.[0-9]+\] [0-9]{2}-[0-9]{2} [0-9:.]+ '
+# Seconds after this script starts (at fs, a few seconds into the boot) to save kernel-early.txt
+KERNEL_EARLY_DELAY=60
 
 # Level 2 shows on screen (loglevel=3), level 6 only in dmesg
 log() {
@@ -41,8 +47,9 @@ log_info() {
     echo "<6>pc_logs: $*" > /dev/kmsg
 }
 
-# The installer is a FAT32 "superfloppy" labelled "install" (or, for the GPT test image,
-# a partition named LINEAGE_INSTALL). Only sd* disks are checked: USB sticks are SCSI disks.
+# The installer is a FAT32 "superfloppy" labelled "install", or a GPT disk with a partition
+# named LINEAGE_INSTALL (scripts/make_usb_image.sh).
+# Only sd* disks are checked: USB sticks are SCSI disks.
 find_installer() {
     for sys in /sys/class/block/sd*; do
         name=${sys##*/}
@@ -90,6 +97,33 @@ free_kb() {
     stat -f -c "%a %S" $1 | { read -r blocks size; echo $((blocks * size / 1024)); }
 }
 
+# Prints (and creates) this boot's directory on the partition mounted at $1, after dropping the
+# oldest boots (of either kind) to keep KEEP_BOOTS including this one and MIN_FREE_KB free
+boot_dir() {
+    mkdir -p $1/pc_logs
+    dir=$1/pc_logs/$BOOT_KIND-$(cut -c1-8 /proc/sys/kernel/random/boot_id)
+    ls -1td $1/pc_logs/*-* 2>/dev/null | grep -v "^$dir$" |
+        tail -n +$KEEP_BOOTS | while read -r old; do rm -rf "$old"; done
+    while [ "$(free_kb $1)" -lt $MIN_FREE_KB ]; do
+        old=$(ls -1td $1/pc_logs/*-* 2>/dev/null | grep -v "^$dir$" | tail -n 1)
+        [ -n "$old" ] || break
+        rm -rf "$old"
+    done
+    mkdir -p $dir
+    echo $dir
+}
+
+# Android: once the drivers are up, save the kernel's own messages (without pc_logcat's
+# logcat lines) to kernel-early.txt, in case logcat fills the kernel log and pushes the
+# boot's driver messages (firmware, USB IDs) out before the logs are saved.
+save_kernel_early() {
+    grep -q " $ANDROID_MOUNTPOINT " /proc/mounts || return 1
+    dir=$(boot_dir $ANDROID_MOUNTPOINT)
+    dmesg 2>&1 | grep -v -E "$LOGCAT_LINE" > $dir/kernel-early.txt
+    sync
+    log_info "kernel messages saved to ${dir#$ANDROID_MOUNTPOINT/}/kernel-early.txt"
+}
+
 save() {
     if [ $BOOT_KIND = android ]; then
         where="the pc_logs partition"
@@ -109,21 +143,16 @@ save() {
         mnt=$(mount_installer) || return 1
     fi
 
-    mkdir -p $mnt/pc_logs
-    dir=$mnt/pc_logs/$BOOT_KIND-$(cut -c1-8 /proc/sys/kernel/random/boot_id)
-    # Drop the oldest boots (of either kind), keeping KEEP_BOOTS including this one and
-    # MIN_FREE_KB free
-    ls -1td $mnt/pc_logs/*-* 2>/dev/null | grep -v "^$dir$" |
-        tail -n +$KEEP_BOOTS | while read -r old; do rm -rf "$old"; done
-    while [ "$(free_kb $mnt)" -lt $MIN_FREE_KB ]; do
-        old=$(ls -1td $mnt/pc_logs/*-* 2>/dev/null | grep -v "^$dir$" | tail -n 1)
-        [ -n "$old" ] || break
-        rm -rf "$old"
-    done
-    mkdir -p $dir
+    dir=$(boot_dir $mnt)
     date > $dir/saved_at.txt
-    dmesg > $dir/dmesg.txt 2>&1
-    [ $BOOT_KIND = recovery ] && cp /tmp/recovery.log $dir/recovery.log 2>/dev/null
+    if [ $BOOT_KIND = android ]; then
+        # The kernel log holds both; split them, compressed (a full 16 MB log is about 1.5 MB)
+        dmesg 2>&1 | grep -v -E "$LOGCAT_LINE" | gzip > $dir/dmesg.txt.gz
+        dmesg 2>&1 | grep -E "$LOGCAT_LINE" | gzip > $dir/logcat.txt.gz
+    else
+        dmesg > $dir/dmesg.txt 2>&1
+        cp /tmp/recovery.log $dir/recovery.log 2>/dev/null
+    fi
     sync
     [ $mnt = $MOUNTPOINT ] && umount $mnt
     log "logs saved to ${dir#$mnt/} on $where"
@@ -141,6 +170,7 @@ case "$1" in
         else
             log "could not take over Ctrl+Alt+Del, it reboots without saving logs"
         fi
+        [ $BOOT_KIND = android ] && { sleep $KERNEL_EARLY_DELAY; save_kernel_early; } &
         while true; do
             sleep 1
         done

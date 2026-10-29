@@ -1,0 +1,6 @@
+service vendor.health-pc /vendor/bin/hw/android.hardware.health-service.pc
+    class hal
+    user system
+    group system
+    capabilities WAKE_ALARM BLOCK_SUSPEND
+    file /dev/kmsg w

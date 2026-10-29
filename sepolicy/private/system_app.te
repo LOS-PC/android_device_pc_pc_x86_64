@@ -1,0 +1,6 @@
+# PcSettings: boot resolution for the firmware framebuffer (persist.sys.pc.boot_resolution)
+set_prop(system_app, pc_display_prop)
+
+# PcSettings: sound output and input (persist.sys.pc.audio.*), listed from /proc/asound/pcm
+set_prop(system_app, pc_audio_prop)
+r_dir_file(system_app, proc_asound)

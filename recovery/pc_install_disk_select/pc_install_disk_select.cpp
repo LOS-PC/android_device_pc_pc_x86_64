@@ -24,7 +24,9 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 using android::base::GetProperty;
@@ -36,8 +38,9 @@ using android::base::unique_fd;
 
 namespace {
 
-// 12 GiB super plus room for the other partitions and userdata
-constexpr uint64_t kMinDiskBytes = 16ull * 1024 * 1024 * 1024;
+// 4 GiB super and about 600 MB of other partitions, plus room for userdata. Low enough for
+// "16 GB" USB sticks and SD cards, which hold about 15.5 GB.
+constexpr uint64_t kMinDiskBytes = 12'000'000'000ull;
 
 struct Disk {
     std::string name;
@@ -48,6 +51,9 @@ struct Disk {
     bool has_partition_table = false;
     bool has_lineage = false;
     bool is_installer = false;
+
+    // USB drives and SD cards, hidden unless asked for so a stick isn't erased by mistake
+    bool IsRemovable() const { return transport == "USB" || transport == "SD card"; }
 };
 
 std::string ReadSysfs(const std::string& path) {
@@ -133,12 +139,14 @@ std::vector<Disk> ScanDisks() {
             disk.transport = "NVMe";
             disk.model = ReadSysfs(sys + "/device/model");
         } else if (android::base::StartsWith(name, "mmcblk")) {
-            // eMMC only: skip SD cards and the eMMC boot / RPMB areas
+            // eMMC and SD cards, but not the eMMC boot / RPMB areas or SDIO devices
+            std::string type = ReadSysfs(sys + "/device/type");
             if (name.find("boot") != std::string::npos || name.find("rpmb") != std::string::npos ||
-                ReadSysfs(sys + "/device/type") != "MMC") {
+                (type != "MMC" && type != "SD")) {
+                LOG(INFO) << name << ": MMC device of type '" << type << "', not listing it";
                 continue;
             }
-            disk.transport = "eMMC";
+            disk.transport = type == "SD" ? "SD card" : "eMMC";
             disk.model = ReadSysfs(sys + "/device/name");
         } else if (android::base::StartsWith(name, "sd")) {
             std::string path;
@@ -160,13 +168,17 @@ std::vector<Disk> ScanDisks() {
         uint64_t sectors = 0;
         android::base::ParseUint(ReadSysfs(sys + "/size"), &sectors);
         disk.size_bytes = sectors * 512;  // sysfs size is always in 512-byte units
-        if (disk.size_bytes == 0) continue;
+        if (disk.size_bytes == 0) {
+            LOG(INFO) << name << ": empty (e.g. a card reader without a card), not listing it";
+            continue;
+        }
 
         ReadPartitionTable(disk, sector_size);
         if (disk.is_installer) {
             LOG(INFO) << name << " is the installer, not listing it";
             continue;
         }
+        LOG(INFO) << name << ": " << disk.transport << ", " << disk.size_bytes << " bytes";
         disks.push_back(disk);
     }
     std::sort(disks.begin(), disks.end(),
@@ -246,22 +258,51 @@ int OnInput(int fd, uint32_t epevents) {
     return 0;
 }
 
-int WaitKey() {
+// Returns the pressed key, or -1 if none was pressed within timeout_ms (-1: wait forever)
+int WaitKey(int timeout_ms) {
     g_key = -1;
     while (g_key < 0) {
-        if (!ev_wait(-1)) ev_dispatch();
+        if (ev_wait(timeout_ms)) return -1;
+        ev_dispatch();
     }
     return g_key;
 }
 
-// Shows a menu and returns the chosen index. Disabled items can't be chosen.
+// The block devices and their sizes, to notice disks that show up (or go away) while a
+// list is shown: SD cards finish initializing a while after the controller, and USB
+// card readers have a size only once a card is in
+std::string BlockDevicesSnapshot() {
+    std::string snapshot;
+    std::unique_ptr<DIR, decltype(&closedir)> dir(opendir("/sys/block"), closedir);
+    if (!dir) return snapshot;
+    std::vector<std::string> entries;
+    while (dirent* de = readdir(dir.get())) {
+        std::string name = de->d_name;
+        if (name[0] == '.') continue;
+        entries.push_back(name + "=" + ReadSysfs("/sys/block/" + name + "/size"));
+    }
+    std::sort(entries.begin(), entries.end());
+    for (const auto& entry : entries) snapshot += entry + " ";
+    return snapshot;
+}
+
+constexpr size_t kMenuChanged = SIZE_MAX;
+
+// Shows a menu and returns the chosen index. Disabled items can't be chosen. With changed,
+// it's checked every second, and kMenuChanged is returned once it's true.
 size_t RunMenu(const std::vector<Line>& header, const std::vector<std::string>& items,
-               const std::vector<bool>& enabled, const std::vector<Line>& footer) {
+               const std::vector<bool>& enabled, const std::vector<Line>& footer,
+               const std::function<bool()>& changed = nullptr) {
     size_t selected = 0;
     while (selected < items.size() && !enabled[selected]) selected++;
+    Draw(header, items, enabled, selected, footer);
     for (;;) {
-        Draw(header, items, enabled, selected, footer);
-        switch (WaitKey()) {
+        int key = WaitKey(changed ? 1000 : -1);
+        if (key < 0) {
+            if (changed()) return kMenuChanged;
+            continue;
+        }
+        switch (key) {
             case KEY_UP:
             case KEY_VOLUMEUP:
                 for (size_t i = selected; i > 0; i--) {
@@ -286,6 +327,7 @@ size_t RunMenu(const std::vector<Line>& header, const std::vector<std::string>& 
                 if (selected < items.size() && enabled[selected]) return selected;
                 break;
         }
+        Draw(header, items, enabled, selected, footer);
     }
 }
 
@@ -318,38 +360,60 @@ int main(int /* argc */, char** argv) {
     gr_font_size(gr_sys_font(), &g_char_w, &g_char_h);
     ev_init(OnInput);
 
+    bool show_removable = false;
     for (;;) {
-        std::vector<Disk> disks = ScanDisks();
+        std::string snapshot = BlockDevicesSnapshot();
+        std::vector<Disk> disks;
+        size_t hidden = 0;
+        for (auto& disk : ScanDisks()) {
+            if (disk.IsRemovable() && !show_removable) {
+                hidden++;
+            } else {
+                disks.push_back(std::move(disk));
+            }
+        }
 
         std::vector<std::string> items;
         std::vector<bool> enabled;
         for (const auto& disk : disks) {
             bool big_enough = disk.size_bytes >= kMinDiskBytes;
             items.push_back(Describe(disk) + "   [" +
-                            (big_enough ? Contents(disk) : "too small, needs 16 GB") + "]");
+                            (big_enough ? Contents(disk) : "too small, needs 12 GB") + "]");
             enabled.push_back(big_enough);
         }
+        items.push_back(show_removable ? "Hide USB drives and SD cards"
+                        : hidden       ? StringPrintf("Show USB drives and SD cards (%zu)", hidden)
+                                       : "Show USB drives and SD cards");
         items.push_back("Rescan disks");
         items.push_back("Reboot");
         items.push_back("Power off");
-        enabled.insert(enabled.end(), {true, true, true});
+        enabled.insert(enabled.end(), {true, true, true, true});
+        const size_t toggle = disks.size(), rescan = toggle + 1, reboot = toggle + 2,
+                     power_off = toggle + 3;
 
         std::vector<Line> header = {
                 {"LineageOS installer", Line::kTitle},
                 {"Choose the disk to install LineageOS on.", Line::kNormal},
         };
         if (disks.empty()) {
-            header.push_back({"No disks found. Connect one and choose Rescan disks.",
+            header.push_back({show_removable ? "No disks found. Connect one and choose Rescan disks."
+                                             : "No internal disks found.",
                               Line::kWarning});
         }
 
-        size_t choice = RunMenu(header, items, enabled, kKeysHelp);
-        if (choice == disks.size()) continue;
-        if (choice == disks.size() + 1) {
+        // The list updates itself when disks show up, e.g. SD cards, which take a while
+        size_t choice = RunMenu(header, items, enabled, kKeysHelp,
+                                [&] { return BlockDevicesSnapshot() != snapshot; });
+        if (choice == kMenuChanged || choice == rescan) continue;
+        if (choice == toggle) {
+            show_removable = !show_removable;
+            continue;
+        }
+        if (choice == reboot) {
             SetProperty("sys.powerctl", "reboot");
             return 0;
         }
-        if (choice == disks.size() + 2) {
+        if (choice == power_off) {
             SetProperty("sys.powerctl", "shutdown");
             return 0;
         }
@@ -360,6 +424,10 @@ int main(int /* argc */, char** argv) {
                 {Describe(disk), Line::kNormal},
                 {"Contents: " + Contents(disk), Line::kNormal},
         };
+        if (disk.IsRemovable()) {
+            confirm_header.push_back(
+                    {"To start LineageOS, choose this drive in the PC's boot menu.", Line::kNormal});
+        }
         std::vector<std::string> options;
         if (disk.has_lineage) {
             confirm_header.push_back(

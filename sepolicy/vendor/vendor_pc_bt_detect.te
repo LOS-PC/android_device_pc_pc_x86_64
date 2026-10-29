@@ -1,0 +1,20 @@
+# pc_bt_detect.sh: look for a Bluetooth adapter in sysfs and set vendor.pc.sku
+type vendor_pc_bt_detect, domain;
+type vendor_pc_bt_detect_exec, exec_type, vendor_file_type, file_type;
+init_daemon_domain(vendor_pc_bt_detect)
+
+allow vendor_pc_bt_detect vendor_shell_exec:file rx_file_perms;
+allow vendor_pc_bt_detect vendor_toolbox_exec:file rx_file_perms;
+
+allow vendor_pc_bt_detect sysfs_type:dir r_dir_perms;
+allow vendor_pc_bt_detect sysfs_type:file r_file_perms;
+allow vendor_pc_bt_detect sysfs_type:lnk_file read;
+allow vendor_pc_bt_detect kmsg_device:chr_file w_file_perms;
+
+set_prop(vendor_pc_bt_detect, vendor_pc_prop)
+
+# Remember that this PC has an adapter (a file on the persist partition, which init.pc.rc
+# lets it write by running it in group system)
+allow vendor_pc_bt_detect mnt_vendor_file:dir search;
+allow vendor_pc_bt_detect persist_file:dir rw_dir_perms;
+allow vendor_pc_bt_detect persist_file:file create_file_perms;

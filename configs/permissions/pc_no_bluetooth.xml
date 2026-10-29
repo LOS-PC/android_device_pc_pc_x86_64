@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-FileCopyrightText: The LineageOS Project
+    SPDX-License-Identifier: Apache-2.0
+-->
+<!-- Read when pc_bt_detect.sh found no Bluetooth adapter (vendor SKU "nobluetooth"):
+     hides Bluetooth, which virt-common declares, from the framework, Settings and the
+     quick settings panel. -->
+<permissions>
+    <unavailable-feature name="android.hardware.bluetooth" />
+    <unavailable-feature name="android.hardware.bluetooth_le" />
+</permissions>

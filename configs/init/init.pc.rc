@@ -30,9 +30,43 @@ service vendor.pc_save_logs /vendor/bin/pc_save_logs.sh watch
 on shutdown
     exec - root root -- /vendor/bin/pc_save_logs.sh save
 
-# GPU: pc_gpu_detect sets ro.vendor.graphics.gpu and ro.vendor.graphics. Runs at init,
-# so the property triggers below fire before the graphics HALs start.
-on init
+# Display: save the resolution chosen in Settings (PcSettings) for GRUB, which sets it
+# before booting; only used with the firmware framebuffer (simpledrm)
+service vendor.grub-editenv-set-pc_display_mode /vendor/bin/grub-editenv /mnt/vendor/persist/grubenv set pc_display_mode=${persist.sys.pc.boot_resolution}
+    user system
+    group system
+    disabled
+    oneshot
+
+on property:persist.sys.pc.boot_resolution=*
+    start vendor.grub-editenv-set-pc_display_mode
+
+# Bluetooth: pc_bt_detect.sh picks the vendor SKU, and SystemConfig (system_server) reads
+# /vendor/etc/permissions/sku_nobluetooth/ when there's no adapter. Runs synchronously
+# before zygote, after USB devices had time to show up; set by expansion rather than a
+# property trigger, whose action would only run after boot. Root for /dev/kmsg, group system
+# to write its marker on the persist partition (owned by system, mode 0770).
+on post-fs-data
+    exec - root system -- /vendor/bin/pc_bt_detect.sh ${ro.boot.bluetooth:-auto}
+    setprop ro.boot.product.vendor.sku ${vendor.pc.sku}
+
+# Audio: unmute the outputs of every sound card and pick the default output and input
+# before the audio HAL starts
+on early-boot
+    exec - audioserver audio -- /vendor/bin/pc_setup_sound
+
+# Audio: the output and input chosen in Settings (PcSettings), "<card>,<device>" or "auto".
+# The audio HAL reads them whenever a stream starts.
+on property:persist.sys.pc.audio.output=*
+    setprop persist.vendor.audio.primary.output ${persist.sys.pc.audio.output}
+
+on property:persist.sys.pc.audio.input=*
+    setprop persist.vendor.audio.primary.input ${persist.sys.pc.audio.input}
+
+# GPU: pc_gpu_detect sets ro.vendor.graphics.gpu, ro.vendor.graphics and minigbm's
+# backend. It waits for the vendor modules (amdgpu), which dlkm_loader_mainline starts
+# loading at init, so it runs later, but still before boot starts the graphics HALs.
+on post-fs-data
     exec u:r:vendor_pc_gpu_detect:s0 -- /vendor/bin/pc_gpu_detect
 
 # Intel
@@ -49,5 +83,10 @@ on property:ro.vendor.graphics.gpu=intel && property:ro.vendor.graphics=mesa && 
 
 on property:ro.vendor.graphics.gpu=intel && property:ro.vendor.graphics=mesa && property:ro.boot.hardware_vulkan=intel_hasvk
     setprop ro.hardware.vulkan intel_hasvk
+
+# AMD - mesa (radeonsi, RADV)
+on property:ro.vendor.graphics.gpu=amd && property:ro.vendor.graphics=mesa
+    setprop ro.opengles.version 196610
+    setprop ro.hardware.vulkan radeon
 
 # Everything else uses software rendering (ro.vendor.graphics=swiftshader, see init.virt.rc)

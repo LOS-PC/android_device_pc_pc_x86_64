@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-FileCopyrightText: The LineageOS Project
+    SPDX-License-Identifier: Apache-2.0
+-->
+<resources>
+    <string name="app_name">PC settings</string>
+
+    <string name="display_settings_title">Screen rotation &amp; resolution</string>
+    <string name="display_settings_summary">Rotation, resolution and refresh rate</string>
+
+    <string name="rotation_title">Screen rotation</string>
+    <string name="rotation_0">Normal</string>
+    <string name="rotation_90">90°</string>
+    <string name="rotation_180">180° (upside down)</string>
+    <string name="rotation_270">270°</string>
+
+    <string name="resolution_title">Resolution</string>
+    <string name="refresh_rate_title">Refresh rate</string>
+    <string name="automatic">Automatic</string>
+    <!-- %1$s: e.g. "1920 × 1080" -->
+    <string name="automatic_with_current">Automatic (%1$s)</string>
+    <!-- %1$d × %2$d: width × height in pixels -->
+    <string name="resolution_entry">%1$d × %2$d</string>
+    <!-- %1$s: refresh rate, e.g. "59.95" -->
+    <string name="refresh_rate_entry">%1$s Hz</string>
+
+    <!-- Firmware framebuffer (no GPU driver): only the boot resolution can be chosen -->
+    <string name="boot_resolution_title">Resolution (applies after restart)</string>
+    <string name="boot_resolution_summary">Currently %1$s. Without a driver for this graphics card, the resolution is set when the computer starts.</string>
+    <string name="refresh_rate_unavailable">Needs a driver for this graphics card</string>
+    <string name="restart_title">Restart now?</string>
+    <string name="restart_message">The new resolution is used after restarting.</string>
+    <string name="restart_now">Restart</string>
+    <string name="restart_later">Later</string>
+
+    <string name="sound_settings_title">Sound output &amp; input</string>
+    <string name="sound_settings_summary">Speakers, headphones, HDMI and microphone</string>
+    <string name="sound_output_title">Output</string>
+    <string name="sound_input_title">Input</string>
+    <!-- %1$s: the device, e.g. "ALC3227 Analog"; %2$s: its sound card, e.g. "HD-Audio Generic" -->
+    <string name="sound_device_entry">%1$s (%2$s)</string>
+    <string name="sound_device_missing">Not connected</string>
+</resources>

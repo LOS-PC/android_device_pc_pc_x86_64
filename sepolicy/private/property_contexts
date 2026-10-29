@@ -1,0 +1,4 @@
+# PcSettings
+persist.sys.pc.boot_resolution	u:object_r:pc_display_prop:s0 exact string
+persist.sys.pc.audio.output	u:object_r:pc_audio_prop:s0 exact string
+persist.sys.pc.audio.input	u:object_r:pc_audio_prop:s0 exact string

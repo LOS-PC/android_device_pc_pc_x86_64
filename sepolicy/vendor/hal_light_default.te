@@ -1,0 +1,7 @@
+# Laptop backlights (/sys/class/backlight/*/brightness); mainline-common only lets it read them
+allow hal_light_default vendor_sysfs_backlight:file w_file_perms;
+
+# Intel backlights are under the GPU (/sys/devices/pci0000:00/0000:00:02.0/drm/.../
+# intel_backlight), whose directory genfs_contexts labels sysfs_gpu for Mesa: the HAL has to
+# pass through it to reach them
+allow hal_light_default sysfs_gpu:dir search;

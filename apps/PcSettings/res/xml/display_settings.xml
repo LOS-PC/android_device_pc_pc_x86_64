@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-FileCopyrightText: The LineageOS Project
+    SPDX-License-Identifier: Apache-2.0
+-->
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    android:title="@string/display_settings_title">
+
+    <ListPreference
+        android:key="rotation"
+        android:title="@string/rotation_title"
+        android:persistent="false" />
+
+    <!-- Entries are filled in from the display's modes -->
+    <ListPreference
+        android:key="resolution"
+        android:title="@string/resolution_title"
+        android:persistent="false" />
+
+    <ListPreference
+        android:key="refresh_rate"
+        android:title="@string/refresh_rate_title"
+        android:persistent="false" />
+</PreferenceScreen>

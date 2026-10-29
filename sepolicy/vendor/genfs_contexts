@@ -4,3 +4,11 @@ genfscon sysfs /devices/pci0000:00/0000:00:02.0			u:object_r:sysfs_gpu:s0
 # Ctrl+Alt+Del handling (pc_save_logs in recovery)
 genfscon proc /sys/kernel/cad_pid					u:object_r:proc_pc_cad:s0
 genfscon proc /sys/kernel/ctrl-alt-del					u:object_r:proc_pc_cad:s0
+
+# Firmware loading: dlkm_loader_mainline.rc (vendor_init) sets force_sysfs_fallback, so that
+# ueventd serves firmware from /vendor/firmware (amdgpu, Bluetooth, ...); as plain proc,
+# vendor_init can't write it
+genfscon proc /sys/kernel/firmware_config				u:object_r:vendor_proc_firmware_config:s0
+
+# Health HAL: the list of batteries and chargers (its entries are labeled in file_contexts)
+genfscon sysfs /class/power_supply					u:object_r:sysfs_batteryinfo:s0

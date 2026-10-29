@@ -1,0 +1,13 @@
+# init.pc.rc: setprop ro.boot.product.vendor.sku ${vendor.pc.sku}
+get_prop(vendor_init, vendor_pc_prop)
+
+# dlkm_loader_mainline.rc: write /proc/sys/kernel/firmware_config/force_sysfs_fallback 1
+allow vendor_init vendor_proc_firmware_config:dir search;
+allow vendor_init vendor_proc_firmware_config:file w_file_perms;
+
+# init.pc.rc: save persist.sys.pc.boot_resolution (PcSettings) for GRUB
+get_prop(vendor_init, pc_display_prop)
+
+# init.pc.rc: pass the sound output and input chosen in PcSettings to the audio HAL
+get_prop(vendor_init, pc_audio_prop)
+set_prop(vendor_init, vendor_audio_prop)

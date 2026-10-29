@@ -22,8 +22,8 @@ AB_OTA_UPDATER=$4
 EFI_SIZE=256M
 SUPER_SIZE=4G
 
-# 16 GiB in 512-byte sectors
-MIN_DISK_SECTORS=33554432
+# 12 GB in 512-byte sectors (pc_install_disk_select's kMinDiskBytes)
+MIN_DISK_SECTORS=23437500
 
 # Level 6 stays off the screen (loglevel=3 on the kernel command line), level 2 shows up
 log() {
@@ -54,7 +54,7 @@ has_lineage_layout() { # disk
 
 TARGET=/dev/block/$DISK_NAME
 [ -w "$TARGET" ] || fail "cannot open $TARGET"
-[ "$(cat /sys/block/$DISK_NAME/size)" -ge "$MIN_DISK_SECTORS" ] || fail "$DISK_NAME is smaller than 16 GB"
+[ "$(cat /sys/block/$DISK_NAME/size)" -ge "$MIN_DISK_SECTORS" ] || fail "$DISK_NAME is smaller than 12 GB"
 log "install disk: $DISK_NAME ($(( $(cat /sys/block/$DISK_NAME/size) / 2097152 )) GiB)"
 
 # vendor.create_partition_table.start is left unset: in init.recovery.virt.rc it starts
@@ -96,6 +96,25 @@ for i in $(seq 1 50); do
     sleep 0.2
 done
 [ -e /dev/block/by-name/userdata ] || fail "partitions on $DISK_NAME did not show up"
+
+if [ "$ERASE" = "1" ]; then
+    # Clear the start of metadata and userdata so Android formats them on first boot. Only a
+    # few domains may write metadata, so pc_clear_partitions.sh does it as recovery
+    # (init.recovery.pc.rc).
+    for part in metadata userdata; do
+        for i in $(seq 1 25); do
+            [ -e /dev/block/by-name/$part ] && break
+            sleep 0.2
+        done
+    done
+    setprop vendor.pc_install.clear_partitions 1
+    for i in $(seq 1 100); do
+        [ -n "$(getprop vendor.pc_install.partitions_cleared)" ] && break
+        sleep 0.2
+    done
+    [ "$(getprop vendor.pc_install.partitions_cleared)" = "1" ] ||
+        fail "could not clear the metadata and userdata partitions"
+fi
 
 if [ "$ERASE" = "1" ] && [ -f /system/etc/pc_logs.img.gz ]; then
     for i in $(seq 1 25); do

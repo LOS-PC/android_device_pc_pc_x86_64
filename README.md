@@ -8,10 +8,12 @@
 ```
 
 Based on `device/virt/virt-common` (GRUB, installer, A/B, partition layout) and
-`device/mainline/common` (HALs). It replaces `virtio-common` with real hardware support.
+`device/mainline/common` (HALs). It doesn't use the virtio device trees
+(`virtio-common`, `virtio_x86_64`) or their kernel: the kernel config, VINTF manifest
+and VM test drivers are all here.
 
-First target hardware: Acer One 10 S1003 (Atom x5-Z8350, Cherry Trail, 2 GB RAM,
-32 GB eMMC, 32-bit UEFI).
+Target: modern desktop PCs and laptops. Tested on an AMD A6-9225 laptop, a Steam Deck and,
+for 32-bit UEFI and Intel graphics, an Acer One 10 S1003 (Atom x5-Z8350, Cherry Trail).
 
 ## Build
 
@@ -33,9 +35,11 @@ sudo dd if=lineage-<version>-pc_x86_64.img of=/dev/sdX bs=4M conv=fsync status=p
 
 1. Disable Secure Boot. Boot from the USB stick.
 2. Choose **Install** in the installer menu.
-3. Pick the disk in the list. It shows every disk except the installer itself (name,
-   NVMe / SATA / eMMC / USB, size, model, current partitions); disks under 16 GB can't be
-   picked. Up / Down or the volume keys move, Enter or Power selects.
+3. Pick the disk in the list. It shows the internal disks (name, NVMe / SATA / eMMC, size,
+   model, current partitions); **Show USB drives and SD cards** adds those, except the
+   installer itself. Disks under 12 GB can't be picked. Up / Down or the volume keys move,
+   Enter or Power selects. A system installed on a USB drive or SD card starts when it's
+   chosen in the PC's boot menu.
 4. Confirm. A disk without LineageOS is erased completely. A disk that already has
    LineageOS can be reinstalled keeping its data, or erased.
 
@@ -95,34 +99,134 @@ which the install zip and OTAs flash. The kernel has `CONFIG_EFI_MIXED`, so the 
 can use 32-bit firmware services. The installer ISO is still x86_64-efi only; use the
 `.img`.
 
+## Desktop
+
+Aimed at desktop PCs and regular laptops (not tablets or convertibles), on top of
+LineageOS's tablet base (`common_full_tablet_wifionly`):
+
+- `configs/permissions/pc_desktop.xml` declares `android.hardware.type.pc` and freeform
+  windows, like AOSP's `pc_core_hardware.xml`. With both, the window manager starts the
+  display in freeform mode, and Android 16's desktop windowing (enabled on the internal
+  display by virt-common's tablet overlay, and by default in this release) takes over:
+  resizable app windows with a taskbar. The display isn't auto-rotated, and apps get
+  PC mouse input handling.
+- It marks the sensors PCs don't have (accelerometer, compass, gyroscope, proximity,
+  barometer, ...) unavailable; the ambient light sensor stays, some laptops have one.
+  The touchscreen features stay declared: most apps implicitly require them, and mouse
+  clicks work as touches.
+- `overlay/`: dragging a window to the top edge maximizes it.
+- `frameworks/base` (WM Shell, `DesktopDisplayModeController`): with the form factor based
+  desktop-first switch (enabled in this release), the display only stays in desktop mode
+  with both a touchpad and a physical keyboard, so a desktop with a mouse dropped back to
+  fullscreen apps, and Launcher3 hid the taskbar on the home screen. FEATURE_PC devices
+  are now always desktop-first.
+
+## Display settings
+
+`apps/PcSettings` adds Settings > Display > Screen rotation & resolution:
+
+- Rotation: 0 / 90 / 180 / 270 degrees (`freezeDisplayRotation`), kept across restarts.
+- With a GPU driver, the display's own modes: resolution and refresh rate apply right away
+  as the user preferred display mode; "Automatic" lets Android choose.
+- With the firmware framebuffer (simpledrm, GPUs without a driver), there's one mode, set by
+  GRUB at boot: the resolution is saved to GRUB's environment (`persist.sys.pc.boot_resolution`
+  -> `pc_display_mode`, see `init.pc.rc`) and used after a restart. The property is
+  `pc_display_prop` (`sepolicy/public`, system_ext): set by the app, read by vendor_init. GRUB passes it to the
+  kernel with `gfxpayload`, falling back to `auto` (the monitor's preferred mode) when the
+  firmware doesn't have it. Without a choice it's `auto`, so the native resolution; with
+  software rendering, a lower resolution can be noticeably faster. There's no refresh rate
+  to choose here.
+
 ## Graphics
 
-`pc_gpu_detect` runs at boot and looks at the bound DRM drivers:
+`pc_gpu_detect` runs at boot (`post-fs-data`, after waiting up to 10 s for the vendor
+kernel modules) and looks at the bound DRM drivers:
 
-- Intel (i915 / xe): Mesa (iris / crocus, Vulkan anv / hasvk).
+- Intel (i915 / xe): Mesa (iris / crocus, Vulkan anv / hasvk), minigbm's Intel backends.
+- AMD (amdgpu): Mesa (radeonsi, Vulkan RADV), built with the ACO compiler (no LLVM), and
+  minigbm's gbm_mesa backend. amdgpu is a module (`amdgpu.ko`, vendor_dlkm): it can't start
+  without its firmware, which is in `/vendor/firmware/amdgpu` (`vendor/pc/firmware`), and
+  replaces simpledrm when it binds. GCN 1 / 2 (SI / CIK) cards use amdgpu too.
+  Firmware reaches kernel modules through ueventd (`firmware_directories`):
+  dlkm_loader_mainline.rc sets `force_sysfs_fallback`, which `sepolicy/vendor` labels
+  (`vendor_proc_firmware_config`) so vendor_init may write it. Without that, the kernel only looks
+  in its own firmware path, which virt-common points at `/vendor/firmware_mnt`.
 - Anything else: SwiftShader software rendering on `simpledrm` (the UEFI framebuffer)
-  with minigbm's dumb buffers. This covers NVIDIA and AMD until their drivers are added,
-  and virtio GPUs in a VM.
+  with minigbm's dumb buffers. This covers NVIDIA until its driver is added, and virtio
+  GPUs in a VM.
+
+On machines with both, Intel is preferred, since it usually drives a laptop's own screen.
+`pc_gpu_detect` also sets `vendor.hwc.drm.device` to the chosen GPU's card: drm_hwcomposer
+otherwise scans `card0`, `card1`, ... until one is missing, and when amdgpu replaces
+simpledrm, `card0` is gone. Mesa finds the GPU through its PCI sysfs files (IDs, `uevent`),
+which `sepolicy/vendor/file_contexts` labels `sysfs_gpu` for every PCI device, since an AMD
+GPU can be anywhere on PCI.
 
 `androidboot.gpu=` / `androidboot.graphics=` override it, e.g. `androidboot.graphics=swiftshader`
 to force software rendering on Intel.
 
+## Audio
+
+The kernel has the HD Audio codec drivers found on PC motherboards and laptops (Realtek,
+Conexant, Analog Devices, IDT / SigmaTel, VIA, Cirrus, Creative, C-Media, Senary) and
+HDMI / DisplayPort audio, built in. AOSP's default AIDL audio HAL plays to ALSA card 0,
+device 0, which on most desktops is the motherboard's analog output.
+
+HDA codecs start with their outputs muted, and the HAL only drives `Master`, so
+`pc_setup_sound` turns on the output switches (`Front`, `Speaker`, `Headphone`,
+`IEC958`, ...) and sets their volumes to 0 dB on every card at boot, like `alsactl init`.
+It leaves inputs alone, so microphones aren't looped back to the speakers.
+
+## Wi-Fi
+
+Android drives the first wireless interface (`wlan0`) through `wpa_supplicant` (nl80211),
+with no vendor Wi-Fi HAL. The kernel builds the common PC drivers as modules, all loaded at
+boot (`BOARD_VENDOR_KERNEL_MODULES_LOAD`), since Android doesn't load drivers on demand:
+Realtek rtw88 / rtw89 / rtl8xxxu / rtlwifi, MediaTek mt76, Qualcomm Atheros ath9k_htc /
+ath9k / ath10k / ath11k / ath12k, Intel iwlwifi, Broadcom brcmfmac (PCIe, USB) and Ralink
+rt2800. RTL8821AU / RTL8812AU USB adapters (e.g. TP-Link Archer T2U) use rtw88's
+8821au / 8812au drivers, backported to `kernel/pc/pc` from 6.13 (upstream's rtw88 commits
+between 6.12 and 6.13 that the stable tree doesn't have). USB adapters plugged in later
+bind to the loaded drivers. Their firmware, and the
+Bluetooth firmware of the same chips, is in `vendor/pc/firmware/wireless`.
+
+## Bluetooth
+
+`pc_bt_detect.sh` looks for an adapter before system_server starts: an HCI in
+`/sys/class/bluetooth`, or a USB interface of the Bluetooth class, waiting until USB
+devices have settled (at most 4 s). Without one, it sets the vendor SKU to
+`nobluetooth` (`ro.boot.product.vendor.sku`), and `/vendor/etc/permissions/sku_nobluetooth/`
+marks the Bluetooth features unavailable: Android doesn't start Bluetooth, and Settings
+and the quick settings panel don't show it. Adapters plugged in later are seen after a
+reboot. `androidboot.bluetooth=1` / `0` skips the detection.
+
 ## Kernel
 
-`configs/kernel/pc.config`: EFI mixed mode, NVMe/AHCI/eMMC/USB storage, built-in i915,
-simpledrm, Ethernet (Realtek r8169, Intel e1000e/igb/igc), ACPI battery/AC, PS/2 and
-I2C-HID input.
+Source: `kernel/pc/pc`, a copy of `kernel/virt/virtio` (LineageOS's android16-6.12 GKI
+tree) so the virtio target's kernel stays untouched. Its own changes: simpledrm accepts
+ARGB8888 / ABGR8888 / XBGR8888 framebuffers (what Android renders into) and converts them
+when copying to the firmware's XRGB8888 framebuffer, and rtw88 has the RTL8821AU /
+RTL8812AU drivers from 6.13.
+
+`configs/kernel/pc.config`: EFI mixed mode, NVMe/AHCI/eMMC/SD (SDHCI, Realtek card
+readers)/USB storage, GPU drivers as modules (i915, xe, amdgpu), simpledrm, Ethernet
+(Realtek r8169, Intel e1000e/igb/igc), HD Audio, ACPI battery/AC and laptop drivers,
+PS/2 and I2C-HID input.
 `configs/kernel/cherrytrail.config`: Bay Trail / Cherry Trail GPIO, LPSS, I2C, PWM,
 PMICs and their ACPI OpRegions (needed for eMMC and panel power), AXP288 battery.
 
-The virtio drivers are kept, so the target can be tested in a VM first.
+`configs/kernel/vm.config`: VirtIO devices, 9p and the sound cards QEMU emulates, so the
+target can be tested in a VM first.
 
 ## Known gaps
 
-- Battery and suspend: still virt-common's fake battery HAL and no suspend.
-- Wi-Fi (RTL8723BS on many Cherry Trail tablets), audio, touchscreen and cameras are not
-  set up yet.
-- Hardware graphics are Intel only. AMD and NVIDIA run on software rendering until Mesa
-  radeonsi/RADV and an NVIDIA driver (nouveau/NVK or NVIDIA's open kernel module) are added.
-- Wi-Fi and audio on desktops are not set up yet; Ethernet works for the common chips.
+- Cameras are not set up yet. Tablets and old Atom / budget Celeron machines (SDIO Wi-Fi,
+  UART Bluetooth, I2S audio, touchscreens) aren't targeted.
+- Hardware graphics are Intel and AMD only. NVIDIA runs on software rendering until
+  nouveau + NVK are added. NVIDIA's open kernel module alone doesn't
+  help: its OpenGL / Vulkan libraries are closed and only built for glibc Linux.
+- Wi-Fi: only `wlan0` (the first adapter) is used.
+- Audio: laptops whose speakers sit behind an amplifier (Cirrus CS35L41/56,
+  TI TAS2781) or whose microphones need Intel SOF (most since ~2019) need more drivers
+  and firmware.
 - 2 GB RAM is tight for Android 16. `androidboot.low_perf=1` (GRUB settings) helps.

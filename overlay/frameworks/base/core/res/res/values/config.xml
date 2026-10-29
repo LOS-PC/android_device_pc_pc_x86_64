@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    SPDX-FileCopyrightText: The LineageOS Project
+    SPDX-License-Identifier: Apache-2.0
+-->
+<!-- Desktop windowing. virt-common's tablet overlay already enables it on the internal
+     display (config_isDesktopModeSupported, config_canInternalDisplayHostDesktops), and
+     android.hardware.type.pc + freeform windows (pc_desktop.xml) make it the default. -->
+<resources>
+    <!-- Dragging a window to the top edge maximizes it, like on desktop OSes -->
+    <bool name="config_dragToMaximizeInDesktopMode">true</bool>
+
+    <!-- Laptops: closing the lid (the kernel's "Lid Switch" input device, SW_LID) turns the
+         screen off, and the system then suspends like after the screen timeout. Opening it
+         wakes it up again. -->
+    <bool name="config_lidControlsSleep">true</bool>
+</resources>

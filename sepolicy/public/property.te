@@ -1,0 +1,7 @@
+# Boot resolution chosen in PcSettings (persist.sys.pc.boot_resolution): set by the app
+# (system), read by init.pc.rc (vendor), which saves it to GRUB's environment
+system_restricted_prop(pc_display_prop)
+
+# Sound output and input chosen in PcSettings (persist.sys.pc.audio.{output,input}): set by the
+# app, copied by init.pc.rc to the audio HAL's persist.vendor.audio.primary.{output,input}
+system_restricted_prop(pc_audio_prop)

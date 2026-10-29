@@ -12,6 +12,9 @@ recovery_only(`
     # Wait for the new partitions to show up (by-name links to their nodes)
     allow create_partition_table { persist_block_device userdata_block_device }:blk_file getattr;
 
+    # Wait for the new metadata partition too (pc_clear_partitions.sh clears it, as recovery)
+    allow create_partition_table metadata_block_device:blk_file getattr;
+
     # Format the pc_logs partition (an empty FAT image)
     allow create_partition_table pc_logs_block_device:blk_file { getattr w_file_perms };
 

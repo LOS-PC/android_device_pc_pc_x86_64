@@ -45,3 +45,7 @@ on early-fs && property:ro.boot.install=1
 
 on property:ro.boot.install=1 && property:vendor.pc_install.disk=*
     start create_partition_table
+
+# pc_create_partition_table.sh erased the disk: clear the start of metadata and userdata
+on property:ro.boot.install=1 && property:vendor.pc_install.clear_partitions=1
+    exec u:r:recovery:s0 -- /system/bin/sh /system/bin/pc_clear_partitions.sh

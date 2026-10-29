@@ -1,0 +1,28 @@
+//
+// SPDX-FileCopyrightText: The LineageOS Project
+// SPDX-License-Identifier: Apache-2.0
+//
+
+cc_defaults {
+    name: "android.hardware.health-service.pc-defaults",
+    relative_install_path: "hw",
+    defaults: ["libhealth_aidl_impl_user"],
+    static_libs: ["libhealth_aidl_impl"],
+    srcs: ["service.cpp"],
+}
+
+cc_binary {
+    name: "android.hardware.health-service.pc",
+    vendor: true,
+    defaults: ["android.hardware.health-service.pc-defaults"],
+    shared_libs: ["libpower"],
+    init_rc: ["android.hardware.health-service.pc.rc"],
+    vintf_fragments: ["android.hardware.health-service.pc.xml"],
+}
+
+cc_binary {
+    name: "android.hardware.health-service.pc_recovery",
+    recovery: true,
+    defaults: ["android.hardware.health-service.pc-defaults"],
+    init_rc: ["android.hardware.health-service.pc_recovery.rc"],
+}

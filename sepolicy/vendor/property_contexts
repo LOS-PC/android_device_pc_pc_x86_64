@@ -1,2 +1,9 @@
 # Installer disk choice from pc_install_disk_select
 vendor.pc_install.	u:object_r:vendor_create_partition_table_prop:s0
+
+# Recovery's dhcpclient publishes vendor.net.<iface>.gw / .dnsN. mainline-common's
+# "vendor.net." entry is exact, so they'd fall through to vendor_default_prop.
+vendor.net.eth	u:object_r:vendor_net_prop:s0
+
+# Hardware detection (pc_bt_detect.sh)
+vendor.pc.sku	u:object_r:vendor_pc_prop:s0 exact string
