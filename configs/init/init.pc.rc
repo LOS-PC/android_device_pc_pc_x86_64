@@ -89,4 +89,14 @@ on property:ro.vendor.graphics.gpu=amd && property:ro.vendor.graphics=mesa
     setprop ro.opengles.version 196610
     setprop ro.hardware.vulkan radeon
 
+# NVIDIA - mesa (nouveau). No Vulkan driver yet: SwiftShader's would run apps on the CPU,
+# and expects buffers the CPU can map, unlike Mesa's in video memory.
+# No hardware planes: nouveau rejected drm_hwcomposer's plane tests every frame, and app
+# buffers it tried as framebuffers then failed GPU validation in SurfaceFlinger ("fail
+# ttm_validate", MMU fault, channel killed, SurfaceFlinger crashed on the home screen).
+# SurfaceFlinger composes everything on the GPU instead.
+on property:ro.vendor.graphics.gpu=nvidia && property:ro.vendor.graphics=mesa
+    setprop ro.opengles.version 196610
+    setprop ro.vendor.hwc.drm.disable_planes 1
+
 # Everything else uses software rendering (ro.vendor.graphics=swiftshader, see init.virt.rc)

@@ -7,12 +7,14 @@
  * Picks the graphics stack from the DRM drivers that are bound:
  * - Intel (i915 / xe): Mesa (iris / crocus, anv / hasvk), minigbm's gbm_mesa backend.
  * - AMD (amdgpu): Mesa (radeonsi, RADV), minigbm's gbm_mesa backend.
- * - Anything else (simpledrm on the firmware framebuffer, e.g. NVIDIA GPUs whose driver
- *   isn't built yet, or virtio_gpu in a VM): SwiftShader software rendering, with
- *   minigbm's dumb buffer backend.
+ * - NVIDIA Pascal, Turing, Ampere and Ada (nouveau, whose firmware ships for those):
+ *   Mesa (nouveau OpenGL ES, no Vulkan yet), minigbm's gbm_mesa backend.
+ * - Anything else (simpledrm on the firmware framebuffer, nouveau on older NVIDIA GPUs,
+ *   which drives the display but can't render without firmware, or virtio_gpu in a VM):
+ *   SwiftShader software rendering, with minigbm's dumb buffer backend.
  * androidboot.gpu / androidboot.graphics override the choice.
  *
- * The GPU drivers (amdgpu, i915, xe) are modules (they need firmware from /vendor), so this
+ * The GPU drivers (amdgpu, i915, nouveau, xe) are modules (they need firmware from /vendor), so this
  * waits for the vendor modules to be loaded first: once one binds, it replaces simpledrm.
  *
  * It also tells drm_hwcomposer which card to use (vendor.hwc.drm.device): by default it
@@ -25,7 +27,9 @@
 #include <cutils/log.h>
 #include <cutils/properties.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,6 +48,32 @@ static bool is_amd(const char* driver) {
     return !strcmp(driver, "amdgpu");
 }
 
+// From the kernel's nouveau_drm.h, which can't be included next to libdrm's drm.h
+#define DRM_NOUVEAU_GETPARAM 0x00
+#define NOUVEAU_GETPARAM_CHIPSET_ID 11
+
+// Whether a nouveau card is a generation whose firmware ships (vendor/pc/firmware/nvidia):
+// Pascal (0x13x), Turing (0x16x), Ampere (0x17x) or Ada (0x19x), but not the Tegra GP10B
+// (0x13b) or the compute only GA100 (0x170). Without its firmware, nouveau drives the display
+// but can't render, and Mesa would fail.
+static bool is_supported_nvidia(int fd) {
+    struct {
+        uint64_t param;
+        uint64_t value;
+    } getparam = {NOUVEAU_GETPARAM_CHIPSET_ID, 0};
+    if (drmCommandWriteRead(fd, DRM_NOUVEAU_GETPARAM, &getparam, sizeof(getparam))) {
+        ALOGW("Failed to get the nouveau chipset");
+        return false;
+    }
+    uint64_t chipset = getparam.value;
+    uint64_t family = chipset & 0x1f0;
+    bool supported = (family == 0x130 || family == 0x160 || family == 0x170 || family == 0x190) &&
+                     chipset != 0x13b && chipset != 0x170;
+    ALOGI("nouveau chipset 0x%" PRIx64 ": %s", chipset,
+          supported ? "supported" : "no firmware, display only");
+    return supported;
+}
+
 static void wait_for_modules() {
     for (int ms = 0; ms < MODULES_TIMEOUT_MS; ms += 100) {
         if (property_get_bool("vendor.dlkm.modules.ready", false)) return;
@@ -56,6 +86,7 @@ static void wait_for_modules() {
 int main() {
     char drivers[MAX_CARDS][32] = {};
     int card_index[MAX_CARDS] = {};
+    bool nvidia_supported[MAX_CARDS] = {};
     int num_cards = 0;
     int card = -1;  // index in drivers[] of the card that drives the display
     char gpu[PROPERTY_VALUE_MAX] = "";
@@ -73,6 +104,8 @@ int main() {
         if (version) {
             ALOGI("card%d: %s", i, version->name);
             card_index[num_cards] = i;
+            nvidia_supported[num_cards] =
+                    !strcmp(version->name, "nouveau") && is_supported_nvidia(fd);
             strlcpy(drivers[num_cards++], version->name, sizeof(drivers[0]));
             drmFreeVersion(version);
         }
@@ -94,6 +127,12 @@ int main() {
                 card = i;
             }
         }
+        for (int i = 0; i < num_cards && card < 0; i++) {
+            if (nvidia_supported[i]) {
+                strlcpy(gpu, "nvidia", sizeof(gpu));
+                card = i;
+            }
+        }
         if (card < 0 && num_cards) {
             strlcpy(gpu, drivers[0], sizeof(gpu));
             card = 0;
@@ -105,7 +144,7 @@ int main() {
 
     property_get("ro.boot.graphics", graphics, "");
     if (!graphics[0]) {
-        if (!strcmp(gpu, "intel") || !strcmp(gpu, "amd")) {
+        if (!strcmp(gpu, "intel") || !strcmp(gpu, "amd") || !strcmp(gpu, "nvidia")) {
             strlcpy(graphics, "mesa", sizeof(graphics));
         } else {
             ALOGW("No supported GPU driver (display driver: %s), using software rendering", gpu);
@@ -114,11 +153,12 @@ int main() {
     }
 
     // Mesa's GPUs allocate through Mesa's GBM, which knows each driver's tiling and
-    // modifiers (minigbm's own i915 / xe backends aren't built for TARGET_MINIGBM_PLATFORM
-    // generic). minigbm would fall back to it by itself when ro.hardware.egl is mesa, but
-    // init sets that after the allocator starts. simpledrm and friends get dumb buffers,
+    // modifiers (minigbm has no backend for amdgpu or nouveau, and Intel uses the same one,
+    // rather than minigbm's i915 / xe backends, as tested on Cherry Trail). minigbm would fall
+    // back to it by itself when ro.hardware.egl is mesa, but init sets that after the
+    // allocator starts. simpledrm and friends get dumb buffers,
     // which work on any KMS driver.
-    if (!strcmp(gpu, "amd") || !strcmp(gpu, "intel")) {
+    if (!strcmp(gpu, "amd") || !strcmp(gpu, "intel") || !strcmp(gpu, "nvidia")) {
         property_set("vendor.minigbm.generic_backend", "gbm_mesa");
     } else {
         property_set("vendor.minigbm.generic_backend", "dumb_generic");

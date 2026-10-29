@@ -24,6 +24,9 @@ include device/virt/virt-common/BoardConfigVirtCommon.mk
 BOARD_SUPER_PARTITION_SIZE := 4294967296 # 4 GB
 BOARD_VIRT_DYNAMIC_PARTITIONS_SIZE := $(shell expr $(BOARD_SUPER_PARTITION_SIZE) - 4194304 )
 $(call soong_config_set,VIRT_PREINSTALL_CHECK,SUPER_PARTITION_SIZE,$(BOARD_SUPER_PARTITION_SIZE))
+# virt-common's 2048 inodes don't hold the firmware (vendor/pc/firmware: GPU, Wi-Fi and
+# Bluetooth, about 1900 files, directories and symlinks)
+BOARD_VENDORIMAGE_EXTFS_INODE_COUNT := 8192
 
 # Arch
 # Silvermont (Atom) has no AVX, unlike the sandybridge baseline used for VMs.
@@ -42,8 +45,9 @@ BOARD_BOOTCONFIG += \
 $(call soong_config_set_string_list,minigbm_upstream,cflags,-DDRV_I915 -DDRV_XE)
 
 # Graphics (Mesa)
+# nouveau: OpenGL ES for NVIDIA (no Vulkan yet: NVK needs Rust in Mesa's Android build).
 # virgl / virtio keep the target testable in a VM.
-BOARD_MESA3D_GALLIUM_DRIVERS += crocus iris radeonsi virgl
+BOARD_MESA3D_GALLIUM_DRIVERS += crocus iris nouveau radeonsi virgl
 BOARD_MESA3D_VULKAN_DRIVERS += amd intel intel_hasvk virtio
 
 # Kernel
@@ -54,16 +58,20 @@ BOARD_MESA3D_VULKAN_DRIVERS += amd intel intel_hasvk virtio
 # the largest log_buf_len it's given.
 # video.brightness_switch_enabled=0: ACPI video changes the backlight on the brightness keys by
 # itself and also passes them on; Android (the light HAL) does it, so the kernel must not.
+# nouveau.atomic=1: nouveau only exposes atomic modesetting when asked, and drm_hwcomposer
+# needs it (without it, it finds no display and the screen stays black).
 BOARD_KERNEL_CMDLINE += \
     console=tty0 \
     log_buf_len=16M \
     loglevel=3 \
+    nouveau.atomic=1 \
     video.brightness_switch_enabled=0
 
 # GPU drivers are modules, loaded once /vendor (their firmware) is there
 BOARD_VENDOR_KERNEL_MODULES_LOAD += \
     amdgpu.ko \
     i915.ko \
+    nouveau.ko \
     xe.ko
 
 # Wi-Fi drivers (see configs/kernel/pc.config). Android doesn't load modules on demand
