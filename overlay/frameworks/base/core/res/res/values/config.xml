@@ -14,4 +14,9 @@
          screen off, and the system then suspends like after the screen timeout. Opening it
          wakes it up again. -->
     <bool name="config_lidControlsSleep">true</bool>
+
+    <!-- Headphone and line out jacks: the sound cards report them as input devices
+         (SW_HEADPHONE_INSERT, SW_LINEOUT_INSERT, ...), which the audio HAL needs to route
+         to them -->
+    <bool name="config_useDevInputEventForAudioJack">true</bool>
 </resources>

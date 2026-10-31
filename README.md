@@ -169,13 +169,11 @@ to force software rendering on Intel.
 
 The kernel has the HD Audio codec drivers found on PC motherboards and laptops (Realtek,
 Conexant, Analog Devices, IDT / SigmaTel, VIA, Cirrus, Creative, C-Media, Senary) and
-HDMI / DisplayPort audio, built in. AOSP's default AIDL audio HAL plays to ALSA card 0,
-device 0, which on most desktops is the motherboard's analog output.
-
-HDA codecs start with their outputs muted, and the HAL only drives `Master`, so
-`pc_setup_sound` turns on the output switches (`Front`, `Speaker`, `Headphone`,
-`IEC958`, ...) and sets their volumes to 0 dB on every card at boot, like `alsactl init`.
-It leaves inputs alone, so microphones aren't looped back to the speakers.
+HDMI / DisplayPort audio, built in. mainline-common's audio HAL
+(`hardware/mainline/common/interfaces/audio/mainline`) uses alsa-lib and the alsa-ucm-conf
+profiles to find the cards and switch between speakers, headphones and HDMI / DisplayPort.
+Headphone jacks are reported by the sound cards' input devices
+(`config_useDevInputEventForAudioJack`).
 
 ## Wi-Fi
 
@@ -185,8 +183,7 @@ boot (`BOARD_VENDOR_KERNEL_MODULES_LOAD`), since Android doesn't load drivers on
 Realtek rtw88 / rtw89 / rtl8xxxu / rtlwifi, MediaTek mt76, Qualcomm Atheros ath9k_htc /
 ath9k / ath10k / ath11k / ath12k, Intel iwlwifi, Broadcom brcmfmac (PCIe, USB) and Ralink
 rt2800. RTL8821AU / RTL8812AU USB adapters (e.g. TP-Link Archer T2U) use rtw88's
-8821au / 8812au drivers, backported to `kernel/pc/pc` from 6.13 (upstream's rtw88 commits
-between 6.12 and 6.13 that the stable tree doesn't have). USB adapters plugged in later
+8821au / 8812au drivers. USB adapters plugged in later
 bind to the loaded drivers. Their firmware, and the
 Bluetooth firmware of the same chips, is in `vendor/pc/firmware/wireless`.
 
@@ -202,11 +199,10 @@ reboot. `androidboot.bluetooth=1` / `0` skips the detection.
 
 ## Kernel
 
-Source: `kernel/pc/pc`, a copy of `kernel/virt/virtio` (LineageOS's android16-6.12 GKI
-tree) so the virtio target's kernel stays untouched. Its own changes: simpledrm accepts
+Source: `kernel/pc/pc`, a copy of `kernel/virt/virtio` (LineageOS's android17-6.18 GKI
+tree) so the virtio target's kernel stays untouched. Its own change: simpledrm accepts
 ARGB8888 / ABGR8888 / XBGR8888 framebuffers (what Android renders into) and converts them
-when copying to the firmware's XRGB8888 framebuffer, and rtw88 has the RTL8821AU /
-RTL8812AU drivers from 6.13.
+when copying to the firmware's XRGB8888 framebuffer.
 
 `configs/kernel/pc.config`: EFI mixed mode, NVMe/AHCI/eMMC/SD (SDHCI, Realtek card
 readers)/USB storage, GPU drivers as modules (i915, xe, amdgpu), simpledrm, Ethernet

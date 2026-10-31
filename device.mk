@@ -56,10 +56,6 @@ PRODUCT_PACKAGES += \
     android.hardware.health-service.pc \
     android.hardware.health-service.pc_recovery
 
-# Audio
-PRODUCT_PACKAGES += \
-    pc_setup_sound
-
 # Bluetooth
 PRODUCT_COPY_FILES += \
     $(DEVICE_PATH)/configs/permissions/pc_no_bluetooth.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/sku_nobluetooth/pc_no_bluetooth.xml \

@@ -50,19 +50,6 @@ on post-fs-data
     exec - root system -- /vendor/bin/pc_bt_detect.sh ${ro.boot.bluetooth:-auto}
     setprop ro.boot.product.vendor.sku ${vendor.pc.sku}
 
-# Audio: unmute the outputs of every sound card and pick the default output and input
-# before the audio HAL starts
-on early-boot
-    exec - audioserver audio -- /vendor/bin/pc_setup_sound
-
-# Audio: the output and input chosen in Settings (PcSettings), "<card>,<device>" or "auto".
-# The audio HAL reads them whenever a stream starts.
-on property:persist.sys.pc.audio.output=*
-    setprop persist.vendor.audio.primary.output ${persist.sys.pc.audio.output}
-
-on property:persist.sys.pc.audio.input=*
-    setprop persist.vendor.audio.primary.input ${persist.sys.pc.audio.input}
-
 # GPU: pc_gpu_detect sets ro.vendor.graphics.gpu, ro.vendor.graphics and minigbm's
 # backend. It waits for the vendor modules (amdgpu), which dlkm_loader_mainline starts
 # loading at init, so it runs later, but still before boot starts the graphics HALs.

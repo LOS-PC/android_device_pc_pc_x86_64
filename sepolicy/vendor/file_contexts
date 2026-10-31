@@ -37,7 +37,6 @@
 # Executables
 /vendor/bin/pc_bt_detect\.sh						u:object_r:vendor_pc_bt_detect_exec:s0
 /vendor/bin/pc_gpu_detect						u:object_r:vendor_pc_gpu_detect_exec:s0
-/vendor/bin/pc_setup_sound						u:object_r:vendor_pc_setup_sound_exec:s0
 /vendor/bin/pc_save_logs\.sh						u:object_r:vendor_pc_save_logs_exec:s0
 
 # Logs
