@@ -57,8 +57,8 @@
 /sys/devices/.*/wakeup/wakeup[0-9]+(/.*)?				u:object_r:sysfs_wakeup:s0
 
 # Laptop backlights, written by the light HAL (hal_light_default.te), with the type
-# mainline-common gives /sys/class/backlight: GPU drivers and ACPI put them under the graphics
-# device's .../backlight/<name> (amdgpu_bl0, acpi_video0) or as a connector's child
-# (.../drm/card0/card0-eDP-1/intel_backlight, nv_backlight)
+# mainline-common gives /sys/class/backlight: ACPI puts them under the graphics device's
+# .../backlight/<name> (acpi_video0), GPU drivers as a connector's child
+# (.../drm/card1/card1-eDP-1/amdgpu_bl1, intel_backlight, nv_backlight, radeon_bl0)
 /sys/devices/.*/backlight/[^/]+(/.*)?					u:object_r:vendor_sysfs_backlight:s0
-/sys/devices/.*/drm/card[0-9]+/card[0-9]+-[^/]+/[a-z0-9_]+_backlight(/.*)?	u:object_r:vendor_sysfs_backlight:s0
+/sys/devices/.*/drm/card[0-9]+/card[0-9]+-[^/]+/[a-z0-9]+_(backlight|bl[0-9]+)(/.*)?	u:object_r:vendor_sysfs_backlight:s0
