@@ -18,3 +18,7 @@ set_prop(vendor_pc_bt_detect, vendor_pc_prop)
 allow vendor_pc_bt_detect mnt_vendor_file:dir search;
 allow vendor_pc_bt_detect persist_file:dir rw_dir_perms;
 allow vendor_pc_bt_detect persist_file:file create_file_perms;
+
+# Keep USB Bluetooth adapters powered during suspend: enable wakeup (power/wakeup, generic
+# sysfs) on the adapter, its hubs and the USB controller
+allow vendor_pc_bt_detect sysfs:file w_file_perms;

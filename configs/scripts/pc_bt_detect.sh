@@ -41,6 +41,29 @@ has_bluetooth() {
     return 1
 }
 
+# Allows the USB Bluetooth adapters to wake the system, along with the hubs and the USB
+# controller between them and the CPU. Most laptops then keep their port powered during
+# suspend (S3). Otherwise the adapter loses power and its firmware, comes back as a new HCI
+# device (hci1) while the Bluetooth HAL still holds the old one, and the stack crashes on
+# the first command after resuming ("Bluetooth keeps stopping").
+keep_bluetooth_powered() {
+    for intf in /sys/bus/usb/devices/*:*; do
+        [ "$(cat $intf/bInterfaceClass 2>/dev/null)" = e0 ] &&
+            [ "$(cat $intf/bInterfaceSubClass 2>/dev/null)" = 01 ] &&
+            [ "$(cat $intf/bInterfaceProtocol 2>/dev/null)" = 01 ] || continue
+        # The interface's device, its hubs, the root hub and the PCI USB controller
+        dev=$(dirname "$(realpath $intf)")
+        enabled=
+        while [ "$dev" != /sys/devices ] && [ "$dev" != / ]; do
+            if [ -e $dev/power/wakeup ] && echo enabled > $dev/power/wakeup 2>/dev/null; then
+                enabled="$enabled ${dev##*/}"
+            fi
+            dev=$(dirname $dev)
+        done
+        log "wakeup enabled for ${intf##*/}:$enabled"
+    done
+}
+
 usb_devices() {
     ls /sys/bus/usb/devices 2>/dev/null | tr '\n' ' '
 }
@@ -86,6 +109,7 @@ case "$1" in
 esac
 
 if [ $found = 1 ]; then
+    keep_bluetooth_powered
     setprop vendor.pc.sku bluetooth
 else
     setprop vendor.pc.sku nobluetooth
